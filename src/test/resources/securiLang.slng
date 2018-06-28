@@ -1,0 +1,1248 @@
+// This is an OLD OLD version (before switching to core versions)
+
+category System {
+
+	abstractAsset Machine {
+
+		| physicalAccess
+				info: "Attackers have physical access to the machine if they have compromised its physical zone or gained physical access to the underlying platform."
+				-> 	executees.physicalAccess,
+				denialOfService
+
+		| networkAccess
+				info: "Attackers have network access to the machine if they have compromised its network zone or gained network access to the underlying platform."
+				-> 	executees.networkAccess
+
+		| executesNetworkService
+				rationale: "This needs to be here in ordert to be overridden in Software. If the model does not contain any explicit relationship from the NetworkService to a Network, it is assumed that the underlying hardware's network is possible to reach for an attacker with root on Service."
+
+		| legitimateConnect
+				->	_machineCoreLegitimateConnect
+
+		| attemptMaliciousConnect
+				->	maliciousConnect,
+					legitimateConnect
+
+		| maliciousConnect
+				->	_machineCoreMaliciousConnect
+
+		| _machineCoreMaliciousConnect
+				->	product.searchForUnprivilegedVulnerability,
+					rootAccount.attemptCrack,
+					userAccounts.attemptCrack,
+					deployConfidentialityExploit, 
+					deployIntegrityExploit, 
+					deployAvailabilityExploit,		
+					legitimateConnect
+
+		| _machineCoreLegitimateConnect 
+				-> 	userLogin, 
+					rootLogin, 
+					uncontrolledAccess
+
+		| userAccess 
+				info: "User access equates the access of a *NIX, non-admin user. Thus, the OS is accessible, e.g. through a shell, but user does not belong to sudoers."
+				-> 	_machineCoreUserAccess
+		
+		| _machineCoreUserAccess 
+				-> 	product.searchForPrivilegeEscalationVulnerability, 
+					attemptMaliciousConnect,
+					data.requestAccess
+		
+		| rootAccess
+				info: "Root access leads to full control of all data stored on the machine. Furthermore, all software using this as an execution platform is compromised."
+				-> 	_machineCoreRootAccess 
+
+		| _machineCoreRootAccess
+				-> 	denialOfService, 
+					rootAccount.attemptCrack,
+					userAccounts.attemptCrack,
+					userAccess, 
+					data.readAccess,
+					data.writeAccess,
+					data.delete,
+					executees.rootAccess
+
+		| userAuthenticate
+				info: "Does the attacker have the credentials of a user account?"
+				-> 	userLogin
+
+		| rootAuthenticate
+				info: "Does the attacker have the credentials of a root account?"
+				-> 	rootLogin
+
+		& userLogin
+				-> 	userAccess
+
+		& rootLogin
+				-> 	rootAccess
+
+		3 rootAccountExists
+				info: "If no account is connected as root, this defense step is compromised."
+				<- 	rootAccount
+				->  uncontrolledAccess
+
+		3 userAccountExists
+				info: "If no account is connected as user, this defense step is compromised."
+				<- 	userAccounts
+				->  uncontrolledAccess
+
+		& uncontrolledAccess
+				info: "If no accounts are connected to this machine, then connect leads directly to userAccess. To model direct root access, explicitly add root account."
+				rationale: "It is implicitly assumed that there is an unknown root account with uncrackable credentials, so a priv.esc. exploit is required for root access. Furthermore, stored data is assumed unavailable, because that requires either an explicit user account or root access. But root access also allows connect to executor (i.e. shell), which seems excessive."
+				// For better resolution, we could introduce an additional compromise beyond root, that granted executor.connect, while root did not, thus representing the subversion of the acutal code (something an admin of a software is not necessarily capable of). Functionally equivalent would be to add a user type "Admin", with access to data but not executor.
+				-> 	rootAccess
+
+		& deployConfidentialityExploit [ExponentialDistribution(10.0)]
+				rationale: "If there is no software product (there really should be), this step is reached directly from connect. Thus, it is assumed that the attacker has already developed an exploit."
+				-> 	confidentialityExploit
+		
+		& deployIntegrityExploit [ExponentialDistribution(10.0)]
+				rationale: "If there is no software product (there really should be), this step is reached directly from connect. Thus, it is assumed that the attacker has already developed an exploit."
+				-> 	integrityExploit 
+		
+		& deployAvailabilityExploit [ExponentialDistribution(10.0)]
+				rationale: "If there is no software product (there really should be), this step is reached directly from connect. Thus, it is assumed that the attacker has already developed an exploit."
+				-> 	availabilityExploit 
+		
+		| confidentialityExploit 
+				->	executees.confidentialityExploit,
+					data.readAccess
+
+		| integrityExploit
+				// For better resolution, we should differentiate between root and user access
+				->	executees.integrityExploit,
+					rootAccess
+
+		| availabilityExploit 
+				->	executees.availabilityExploit,
+					denialOfService
+
+		& deployXSSExploit
+			rationale: "This is a placeholder for an attack step used in WebApplicationService."
+
+		| denialOfService 
+				->	executees.denialOfService,
+					data.denyAccess
+
+		# isPatched
+			info: "The probability that the system is fully patched on any randomly selected day."
+				->	product.findUnprivilegedPublicConfidentialityVulnerability,
+					product.findUnprivilegedPublicIntegrityVulnerability,
+					product.findUnprivilegedPublicAvailabilityVulnerability,
+					product.findUnprivilegedPublicXSSVulnerability,
+					product.findPrivilegeEscalationPublicConfidentialityVulnerability,
+					product.findPrivilegeEscalationPublicIntegrityVulnerability,
+					product.findPrivilegeEscalationPublicAvailabilityVulnerability,
+					product.findPrivilegeEscalationPublicXSSVulnerability
+
+		# noLogin
+			info: "Some services, such as SSH, can be logged onto, while others, such as NTPD, cannot."
+				->	userLogin,
+					rootLogin
+	}
+
+	asset PhysicalMachine extends Machine {
+		| executesNetworkService
+				-> networks.accessLayer2
+	}
+
+	abstractAsset Software extends Machine {
+		| userAccess 
+				-> 	_softwareCoreUserAccess
+
+		| _softwareCoreUserAccess 
+				info: "User access equates the access of a *NIX, non-admin user. Thus, shell services are available, but user does not belong to sudoers."
+				-> 	_machineCoreUserAccess,
+					shellToExecutor
+
+
+		| rootAccess
+				-> 	_softwareCoreRootAccess 
+
+		| _softwareCoreRootAccess
+				info: "Root access leads to control of all accounts that the software owns, as well as to a connection to the executing platform. In that regard, an attacker with root access has the same access as an attacker that controls the program code of the compromised software."
+				// Perhaps Root should be complemented by something like "Pwned", where Pwned could represent the ability to change to software program (in particular leading to executor.maliciousConnect). This ability is not generally given root administrators (only in applications that are shell). In other words, currently, rootLogin will always lead to shell.
+				-> 	_machineCoreRootAccess,
+					assignedAccounts.authenticate,
+					executor.attemptMaliciousConnect
+
+		# notShell
+				info: "Some softwares provide direct access to the underlying executor. For instance, the Bash application provides access to the underlying OS."
+				->	shellToExecutor
+
+		& shellToExecutor
+				->	executor.attemptMaliciousConnect
+
+		| executesNetworkService
+				// This could perhaps be replaced with a multiasset-hop directly to the connected networks.
+				info: "This software directly or indirectly executes a network service. Attackers that reach this point will eventually also reach layer 2 of the connected networks."
+				rationale: "If the model does not contain any explicit relationship from the NetworkService to a Network, it is assumed that the underlying hardware's network is possible to reach for an attacker with root on Service."
+				-> executor.executesNetworkService
+	}
+
+	asset OperatingSystem extends Software {
+		| attemptMaliciousConnect
+			// TODO: Harmonize the structure and naming of endpoint protection with IDPS and firewall. Perhaps even create an attack graph pattern?
+			// TODO: Endpoint protection should extend to the network services running on the OS, I think? Or maybe not?
+				->	attemptMaliciousConnectNoEndpointProtection,
+					attemptMaliciousConnectBypassEndpointProtection,
+					legitimateConnect
+
+
+		& attemptMaliciousConnectNoEndpointProtection
+				info: "Endpoint protection comes from (i) the existence of a (ii) correctly configured endpoint protection system."
+				->	maliciousConnect
+
+		| attemptMaliciousConnectBypassEndpointProtection [ExponentialDistribution(2.2)]
+			rationale: "This number is an exponential adaption of 'J. A. Morales, R. Sandhu, S. Xu, Evaluating detection and treatment effec- tiveness of commercial anti-malware programs, in: Malicious and Unwanted Software (MALWARE), 2010 5th International Conference on, IEEE, 2010, pp. 31–38.'"
+			// This number should be specialized for specific products for two reasons: (i) antimalware sucks more now than in 201, and (ii) securiLang includes all kinds of endpoint protection, not only antimalware.
+				->	maliciousConnect
+					
+		# endPointProtection
+				->	attemptMaliciousConnectNoEndpointProtection
+	}
+
+	asset VirtualMachine extends Software {
+	}
+
+	asset Container extends Application {
+	}
+
+	asset HypervisorTypeI extends Software {
+	}
+
+	asset HypervisorTypeII extends Application {
+	}
+
+	abstractAsset Application extends Software {
+	}
+
+	asset Service extends Application {
+		| userAccess 
+				-> 	_softwareCoreUserAccess
+	}
+
+	asset PeripheralService extends Service {
+		| physicalAccess
+				-> 	attemptMaliciousConnect
+	}
+
+	asset NetworkService extends Service {
+		| rootAccess
+				rationale: "If the model does not contain any explicit relationship from the NetworkService to a Network, it is assumed that the underlying hardware's network is possible to reach for an attacker with root on Service."
+				-> 	_networkServiceCoreRootAccess
+
+		| _networkServiceCoreRootAccess
+				rationale: "If the model does not contain any explicit relationship from the NetworkService to a Network, it is assumed that the underlying hardware's network is possible to reach for an attacker with root on Service."
+				-> 	_softwareCoreRootAccess,
+					exposureNetworks.accessLayer2,
+					executesThroughDefaultNetworkInterface,
+					dataflows.respondAccess
+
+		& executesThroughDefaultNetworkInterface
+				rationale: "If the model does not contain any explicit relationship from the NetworkService to a Network, it is assumed that the underlying hardware's network is possible to reach for an attacker with root on Service."
+				->	executesNetworkService
+
+		| networkAccess
+				-> 	attemptMaliciousConnect
+
+		3 noExposureNetwork
+				rationale: "If the model does not contain any explicit relationship from the NetworkService to a Network, it is assumed that the underlying hardware's network is possible to reach for an attacker with root on Service."
+				<-	exposureNetworks
+				->	executesThroughDefaultNetworkInterface
+				// Here, we would benefit from multi-hop naviation to find the network connected to the physical machine
+	}
+
+	asset WebServer extends NetworkService {
+	}
+
+	asset AuthenticationService extends Service 
+		rationale: "Authentication service is not actively involved in account authentication (e.g. key.read leads directly to account.authenticate), because that is not needed for the attacks we are interested in."
+		{
+		| rootAccess
+				info: "If a service is tasked with authentication of accounts, its compromise leads to the compromise of the associated accounts."
+				-> 	_softwareCoreRootAccess,
+					authenticatedAccounts.authenticate
+
+		| attemptToBreakImplementation
+				-> 	authenticatedAccounts.exploitBrokenImplementation
+
+	    # unbrokenImplementation
+	    	info: "Even with a solid cryptographic scheme, errors may be present in the implementaion, thus making the encryption vulnerable to attack."
+	    		-> 	authenticatedAccounts.exploitBrokenImplementation
+
+		# backOff
+				info: "The number of logon attempts is limited."
+				-> authenticatedAccounts.backOffDisabled
+	}
+
+	asset EncryptionService extends Service {
+		| rootAccess
+				info: "If a service is tasked with authentication of accounts, its compromise leads to the compromise of the associated accounts."
+				-> 	_softwareCoreRootAccess,
+					encryptedData.read,
+					encryptedData.write
+
+	    # unbrokenCryptography
+	    	// unbrokenCrypto and unbrokenImplementation should have public, zero-day, etc. attack steps and thereby follow the logic of other exploits. Currently, compromise happens instantaneously.
+	    	info: "Because we define Key.sufficientEntropy at 70 bits, corresponding to 12 alphanumeric symbols, even MD5 will withstand a brute-force (non-dictionary-based) cracking attempt. Thus, only really crappy encryption schemes should be marked as broken."
+	    		-> 	encryptedData.exploitBrokenCryptography
+
+	    # unbrokenImplementation
+	    	info: "Even with a solid cryptographic scheme, errors may be present in the implementaion, thus making the encryption vulnerable to attack."
+	    		-> 	encryptedData.exploitBrokenImplementation
+	}
+	
+	asset Client extends Application {
+		| userAccess 
+				-> 	_softwareCoreUserAccess,
+					dataflows.requestAccess
+	}
+
+	asset Browser extends Client {
+	}
+
+	asset WebApplicationClient extends Client {
+	}
+
+	asset WebApplicationService extends NetworkService {
+
+		| rootAccess
+				rationale: "If the model does not contain any explicit relationship from the NetworkService to a Network, it is assumed that the underlying hardware's network is possible to reach for an attacker with root on Service."
+				-> 	_networkServiceCoreRootAccess,
+					programDistributionFlow.respondAccess
+	
+			& deployXSSExploit
+			rationale: "."
+				->	programDistributionFlow.respondAccess
+	}
+
+	asset Product {
+		// Eventually, we should harmonize these with CVSS 3.0. However, that will result in 150 different attack steps, each requiring its unique TTC for each product, so we postpone to the future, as the current implementation is at least semi-compliant.
+		| searchForUnprivilegedVulnerability
+				-> 	findUnprivilegedZeroDayConfidentialityVulnerability,
+					findUnprivilegedZeroDayIntegrityVulnerability,
+					findUnprivilegedZeroDayAvailabilityVulnerability,
+					findUnprivilegedPublicConfidentialityVulnerability,
+					findUnprivilegedPublicIntegrityVulnerability,
+					findUnprivilegedPublicAvailabilityVulnerability,
+					findUnprivilegedPublicConfidentialityExploit,
+					findUnprivilegedPublicIntegrityExploit,
+					findUnprivilegedPublicAvailabilityExploit
+
+		| searchForPrivilegeEscalationVulnerability
+				->	findPrivilegeEscalationZeroDayConfidentialityVulnerability,
+					findPrivilegeEscalationZeroDayIntegrityVulnerability,
+					findPrivilegeEscalationZeroDayAvailabilityVulnerability,
+					findPrivilegeEscalationPublicConfidentialityVulnerability,
+					findPrivilegeEscalationPublicIntegrityVulnerability,
+					findPrivilegeEscalationPublicAvailabilityVulnerability,
+					findPrivilegeEscalationPublicConfidentialityExploit,
+					findPrivilegeEscalationPublicIntegrityExploit,
+					findPrivilegeEscalationPublicAvailabilityExploit
+
+		| findUnprivilegedZeroDayConfidentialityVulnerability [ExponentialDistribution(100.0)]
+			rationale: "These numbers should be specified uniquely for each product, based on the Time Between Vulnerability Disclosure (TBVD) paper by Johnson et al.."
+				-> 	developConfidentialityExploit
+
+		| findUnprivilegedZeroDayIntegrityVulnerability [ExponentialDistribution(200.0)]
+			rationale: "These numbers should be specified uniquely for each product, based on the Time Between Vulnerability Disclosure (TBVD) paper by Johnson et al.."
+				-> 	developIntegrityExploit
+
+		| findUnprivilegedZeroDayAvailabilityVulnerability [ExponentialDistribution(50.0)]
+			rationale: "These numbers should be specified uniquely for each product, based on the Time Between Vulnerability Disclosure (TBVD) paper by Johnson et al.."
+				-> 	developAvailabilityExploit
+
+		| findPrivilegeEscalationZeroDayConfidentialityVulnerability [ExponentialDistribution(50.0)]
+			rationale: "These numbers should be specified uniquely for each product, based on the Time Between Vulnerability Disclosure (TBVD) paper by Johnson et al.."
+				-> 	developConfidentialityExploit
+
+		| findPrivilegeEscalationZeroDayIntegrityVulnerability [ExponentialDistribution(100.0)]
+			rationale: "These numbers should be specified uniquely for each product, based on the Time Between Vulnerability Disclosure (TBVD) paper by Johnson et al.."
+				-> 	developIntegrityExploit
+
+		| findPrivilegeEscalationZeroDayAvailabilityVulnerability [ExponentialDistribution(25.0)]
+			rationale: "These numbers should be specified uniquely for each product, based on the Time Between Vulnerability Disclosure (TBVD) paper by Johnson et al.."
+				-> 	developAvailabilityExploit
+
+		& findUnprivilegedPublicConfidentialityVulnerability [ExponentialDistribution(50.0)]
+			info: "If the machine is unpatched, how long before a confidentiality vulnerability is publically disclosed?"
+			rationale: "These numbers should be specified uniquely for each product, based on the NVD."
+				-> 	developConfidentialityExploit
+
+		& findUnprivilegedPublicIntegrityVulnerability [ExponentialDistribution(100.0)]
+			info: "If the machine is unpatched, how long before an integrity vulnerability is publically disclosed?"
+			rationale: "These numbers should be specified uniquely for each product, based on the NVD."
+				-> 	developIntegrityExploit
+
+		& findUnprivilegedPublicAvailabilityVulnerability [ExponentialDistribution(25.0)]
+			info: "If the machine is unpatched, how long before an availability vulnerability is publically disclosed?"
+			rationale: "These numbers should be specified uniquely for each product, based on the NVD."
+				-> 	developAvailabilityExploit
+
+		& findPrivilegeEscalationPublicConfidentialityVulnerability [ExponentialDistribution(25.0)]
+			info: "If the machine is unpatched, how long before a confidentiality vulnerability is publically disclosed?"
+			rationale: "These numbers should be specified uniquely for each product, based on the NVD."
+				-> 	developConfidentialityExploit
+
+		& findPrivilegeEscalationPublicIntegrityVulnerability [ExponentialDistribution(50.0)]
+			info: "If the machine is unpatched, how long before an integrity vulnerability is publically disclosed?"
+			rationale: "These numbers should be specified uniquely for each product, based on the NVD."
+				-> 	developIntegrityExploit
+
+		& findPrivilegeEscalationPublicAvailabilityVulnerability [ExponentialDistribution(12.0)]
+			info: "If the machine is unpatched, how long before an availability vulnerability is publically disclosed?"
+			rationale: "These numbers should be specified uniquely for each product, based on the NVD."
+				-> 	developAvailabilityExploit
+
+		| developConfidentialityExploit [GammaDistribution(0.699, 38.2)]
+			info: "According to 'Ablon, Lillian, and Andy Bogart. Zero Days, Thousands of Nights: The Life and Times of Zero-Day Vulnerabilities and Their Exploits. Rand Corporation, 2017', it takes GammaDistribution[0.699, 38.2] days to develop a zero day exploit after it as been discovered."
+				-> 	obtainConfidentialityExploit
+
+		| developIntegrityExploit [GammaDistribution(0.699, 38.2)]
+			info: "According to 'Ablon, Lillian, and Andy Bogart. Zero Days, Thousands of Nights: The Life and Times of Zero-Day Vulnerabilities and Their Exploits. Rand Corporation, 2017', it takes GammaDistribution[0.699, 38.2] days to develop a zero day exploit after it as been discovered."
+				-> 	obtainIntegrityExploit
+
+		| developAvailabilityExploit [GammaDistribution(0.699, 38.2)]
+			info: "According to 'Ablon, Lillian, and Andy Bogart. Zero Days, Thousands of Nights: The Life and Times of Zero-Day Vulnerabilities and Their Exploits. Rand Corporation, 2017', it takes GammaDistribution[0.699, 38.2] days to develop a zero day exploit after it as been discovered."
+				-> 	obtainAvailabilityExploit
+
+		& findUnprivilegedPublicConfidentialityExploit
+			info: "It is revealed, e.g. by a vulnerability scan, that the machine is vulnerable to a publicly available exploit. (Naturally, this also means that there is a vulnerability, regardless of the state of findPrivilegeEscalationPublicVulnerability.)"
+				->	obtainConfidentialityExploit
+
+		& findUnprivilegedPublicIntegrityExploit
+			info: "It is revealed, e.g. by a vulnerability scan, that the machine is vulnerable to a publicly available exploit. (Naturally, this also means that there is a vulnerability, regardless of the state of findPrivilegeEscalationPublicVulnerability.)"
+				->	obtainIntegrityExploit
+
+		& findUnprivilegedPublicAvailabilityExploit
+			info: "It is revealed, e.g. by a vulnerability scan, that the machine is vulnerable to a publicly available exploit. (Naturally, this also means that there is a vulnerability, regardless of the state of findPrivilegeEscalationPublicVulnerability.)"
+				->	obtainAvailabilityExploit
+
+		& findPrivilegeEscalationPublicConfidentialityExploit
+			info: "It is revealed, e.g. by a vulnerability scan, that the machine is vulnerable to a publicly available exploit. (Naturally, this also means that there is a vulnerability, regardless of the state of findPrivilegeEscalationPublicVulnerability.)"
+				->	obtainConfidentialityExploit
+
+		& findPrivilegeEscalationPublicIntegrityExploit
+			info: "It is revealed, e.g. by a vulnerability scan, that the machine is vulnerable to a publicly available exploit. (Naturally, this also means that there is a vulnerability, regardless of the state of findPrivilegeEscalationPublicVulnerability.)"
+				->	obtainIntegrityExploit
+
+		& findPrivilegeEscalationPublicAvailabilityExploit
+			info: "It is revealed, e.g. by a vulnerability scan, that the machine is vulnerable to a publicly available exploit. (Naturally, this also means that there is a vulnerability, regardless of the state of findPrivilegeEscalationPublicVulnerability.)"
+				->	obtainAvailabilityExploit
+
+		| obtainConfidentialityExploit
+				-> 	machines.deployConfidentialityExploit
+
+		| obtainIntegrityExploit
+				-> 	machines.deployIntegrityExploit
+
+		| obtainAvailabilityExploit
+				-> 	machines.deployAvailabilityExploit
+
+		| findUnprivilegedZeroDayXSSVulnerability
+			rationale: "Placeholder"
+
+		| findUnprivilegedPublicXSSVulnerability
+			rationale: "Placeholder"
+
+		| findUnprivilegedPublicXSSExploit
+			rationale: "Placeholder"
+
+		| findPrivilegeEscalationZeroDayXSSVulnerability
+			rationale: "Placeholder"
+
+		| findPrivilegeEscalationPublicXSSVulnerability
+			rationale: "Placeholder"
+
+		| findPrivilegeEscalationPublicXSSExploit
+			rationale: "Placeholder"
+
+		| developXSSExploit
+			info: "Placeholder."
+
+		| obtainXSSExploit
+			info: "Placeholder."
+
+		# unprivilegedConfidentialityExploitNotPublicallyAvailable
+			info: "This should be false if, e.g., a vulnerability scan finds a publicly exploitable vulnerability. Otherwise true."
+				->	findUnprivilegedPublicConfidentialityExploit
+
+		# unprivilegedIntegrityExploitNotPublicallyAvailable
+			info: "This should be false if, e.g., a vulnerability scan finds a publicly exploitable vulnerability. Otherwise true."
+				->	findUnprivilegedPublicIntegrityExploit
+
+		# unprivilegedAvailabilityExploitNotPublicallyAvailable
+			info: "This should be false if, e.g., a vulnerability scan finds a publicly exploitable vulnerability. Otherwise true."
+				->	findUnprivilegedPublicAvailabilityExploit
+
+		# unprivilegedXSSExploitNotPublicallyAvailable
+			info: "This should be false if, e.g., a vulnerability scan finds a publicly exploitable vulnerability. Otherwise true."
+				->	findUnprivilegedPublicXSSExploit
+
+		# privilegeEscalationConfidentialityExploitNotPublicallyAvailable
+			info: "This should be false if, e.g., a vulnerability scan finds a publicly exploitable vulnerability. Otherwise true."
+				->	findPrivilegeEscalationPublicConfidentialityExploit
+
+		# privilegeEscalationIntegrityExploitNotPublicallyAvailable
+			info: "This should be false if, e.g., a vulnerability scan finds a publicly exploitable vulnerability. Otherwise true."
+				->	findPrivilegeEscalationPublicIntegrityExploit
+
+		# privilegeEscalationAvailabilityExploitNotPublicallyAvailable
+			info: "This should be false if, e.g., a vulnerability scan finds a publicly exploitable vulnerability. Otherwise true."
+				->	findPrivilegeEscalationPublicAvailabilityExploit
+
+		# privilegeEscalationXSSExploitNotPublicallyAvailable
+			info: "This should be false if, e.g., a vulnerability scan finds a publicly exploitable vulnerability. Otherwise true."
+				->	findPrivilegeEscalationPublicXSSExploit
+	}
+
+	asset WebApplicationServiceProduct extends Product {
+		| searchForUnprivilegedVulnerability
+				-> 	findUnprivilegedZeroDayConfidentialityVulnerability,
+					findUnprivilegedZeroDayIntegrityVulnerability,
+					findUnprivilegedZeroDayAvailabilityVulnerability,
+					findUnprivilegedZeroDayXSSVulnerability,
+					findUnprivilegedPublicConfidentialityVulnerability,
+					findUnprivilegedPublicIntegrityVulnerability,
+					findUnprivilegedPublicAvailabilityVulnerability,
+					findUnprivilegedPublicXSSVulnerability,
+					findUnprivilegedPublicConfidentialityExploit,
+					findUnprivilegedPublicIntegrityExploit,
+					findUnprivilegedPublicAvailabilityExploit,
+					findUnprivilegedPublicXSSExploit
+
+		| searchForPrivilegeEscalationVulnerability
+				->	findPrivilegeEscalationZeroDayConfidentialityVulnerability,
+					findPrivilegeEscalationZeroDayIntegrityVulnerability,
+					findPrivilegeEscalationZeroDayAvailabilityVulnerability,
+					findPrivilegeEscalationZeroDayXSSVulnerability,
+					findPrivilegeEscalationPublicConfidentialityVulnerability,
+					findPrivilegeEscalationPublicIntegrityVulnerability,
+					findPrivilegeEscalationPublicAvailabilityVulnerability,
+					findPrivilegeEscalationPublicXSSVulnerability,
+					findPrivilegeEscalationPublicConfidentialityExploit,
+					findPrivilegeEscalationPublicIntegrityExploit,
+					findPrivilegeEscalationPublicAvailabilityExploit,
+					findPrivilegeEscalationPublicXSSExploit
+
+		| findUnprivilegedZeroDayXSSVulnerability [ExponentialDistribution(10.0)]
+			rationale: "These numbers should be specified uniquely for each product, based on the Time Between Vulnerability Disclosure (TBVD) paper by Johnson et al.."
+				-> 	developXSSExploit
+
+		| findUnprivilegedPublicXSSVulnerability [ExponentialDistribution(5.0)]
+			rationale: "These numbers should be specified uniquely for each product, based on the Time Between Vulnerability Disclosure (TBVD) paper by Johnson et al.."
+				-> 	developXSSExploit
+
+		| findUnprivilegedPublicXSSExploit 
+			rationale: "These numbers should be specified uniquely for each product, based on the Time Between Vulnerability Disclosure (TBVD) paper by Johnson et al.."
+				-> 	developXSSExploit
+
+		| findPrivilegeEscalationZeroDayXSSVulnerability [ExponentialDistribution(5.0)]
+			rationale: "These numbers should be specified uniquely for each product, based on the Time Between Vulnerability Disclosure (TBVD) paper by Johnson et al.."
+				-> 	developXSSExploit
+
+		| findPrivilegeEscalationPublicXSSVulnerability  [ExponentialDistribution(3.0)]
+			rationale: "These numbers should be specified uniquely for each product, based on the Time Between Vulnerability Disclosure (TBVD) paper by Johnson et al.."
+				-> 	developXSSExploit
+
+		| findPrivilegeEscalationPublicXSSExploit
+			rationale: "These numbers should be specified uniquely for each product, based on the Time Between Vulnerability Disclosure (TBVD) paper by Johnson et al.."
+				-> 	developXSSExploit
+
+		| developXSSExploit [GammaDistribution(0.699, 38.2)]
+			info: "According to 'Ablon, Lillian, and Andy Bogart. Zero Days, Thousands of Nights: The Life and Times of Zero-Day Vulnerabilities and Their Exploits. Rand Corporation, 2017', it takes GammaDistribution[0.699, 38.2] days to develop a zero day exploit after it as been discovered."
+				-> 	obtainXSSExploit
+
+		| obtainXSSExploit
+				-> 	machines.deployXSSExploit
+	}
+}
+
+category Networking {
+	asset Network
+		info: "Networks include Ethernet LANs, the Internet, and Wifi networks."
+		// For WPA, if the attacker is in range of wifi, a Pairwise Transient Key (PTK) can be captured if eavesdropping on a legitimate handshake between AP and station. From the PTK, the Pre-Shared Key (PSK), can be brute force guessed if it is simple. (PTK from PSK includes PBKDF2 with 4096 iterations, so guessing will be slow.)
+		// This should be modelled as folows: An unencrypted dataflow represents the handshake. The dataflow contains the PSK in the form of a Key (wrapped in encrypted Data). The PSK is then used as the encryption key of all dataflows over the WPA network. 
+		// The attacker will therefore be able to obtain the encrypted PSK. If cracked (a separate attack required), all (other) dataflows over the WPA network can be eavesdropped on.
+		// To facilitate for the end user, the pre-processor/component should automatically add the PSK, relations between the handshake dataflow and new clients, and relations between the PSK and the dataflows that flow over the network.
+
+		{ 	
+		| physicalAccess
+				info: "Physical access currently includes close-enough-to-touch as well as within-wifi-range."
+				-> 	accessLayer3,
+					manInTheMiddle
+		
+ 
+		| accessLayer3
+				info: "Layer 3 access implies the possibility to submit IP packets over the network. It does not imply the possibility to listen to others' trafic on the network. You are outside the router but with a possibility to communicate in to the network."
+					// IDPS should affect the possibility of maliciousConnect 
+				-> 	trafficRouters.forwarding, 
+					denialOfService
+  
+		| eavesdrop
+				info: "Attackers can sometimes eavesdrop on the IP layer. Higher-layer encryption, such as HTTPS, may still prevent the compromise of information in dataflows."
+				-> 	dataflows.eavesdrop
+
+		| denialOfService
+		// The dataflows that pass through a network are given by a dynamic calculation. (These should, in the future, be computed in a preprocessing step that completes user models.)
+				info: "The network is made unavailable."
+				-> 	dataflows.denialOfService 
+
+		| manInTheMiddle
+					info: "Attackers can sometimes intercept and tamper with communications on the IP layer. Higher-layer encryption and authentication, such as HTTPS, may still prevent the compromise of information in dataflows."
+				-> 	accessLayer3,
+					eavesdrop,
+					dataflows.manInTheMiddle,
+					trafficRouters.denialOfService
+		}
+
+	asset WAN extends Network {}
+
+	asset Ethernet extends Network
+		info: "Networks include Ethernet LANs, the Internet, and WiFi networks."
+		// For WPA, if the attacker is in range of wifi, a Pairwise Transient Key (PTK) can be captured if eavesdropping on a legitimate handshake between AP and station. From the PTK, the Pre-Shared Key (PSK), can be brute force guessed if it is simple. (PTK from PSK includes PBKDF2 with 4096 iterations, so guessing will be slow.)
+		// This should be modelled as folows: An unencrypted dataflow represents the handshake. The dataflow contains the PSK in the form of a Key (wrapped in encrypted Data). The PSK is then used as the encryption key of all dataflows over the WPA network. 
+		// The attacker will therefore be able to obtain the encrypted PSK. If cracked (a separate attack required), all (other) dataflows over the WPA network can be eavesdropped on.
+		// To facilitate for the end user, the pre-processor/component should automatically add the PSK, relations between the handshake dataflow and new clients, and relations between the PSK and the dataflows that flow over the network.
+
+		{ 	
+		| physicalAccess
+				info: "Physical access currently includes close-enough-to-touch as well as within-wifi-range."
+				-> 	bypassPortSecurity
+		
+ 		& bypassPortSecurity
+ 				-> 	bypassAccessControl
+  
+		| bypassAccessControl
+				-> 	accessLayer2
+
+		| accessLayer2 
+				info: "Hosts with a MAC address on the network have Layer 2 access."
+				rationale: "Access to layer 2 may enable eavesdropping, depending on the kind of network, as well as ARP cache poisoning either on the router side or any of the hosts on the network. (Router side ARP cache poisoning is modelled as a property on the network.)"
+				-> 	accessLayer3, 
+					aRPCachePoisoning
+  
+		| accessLayer3
+				info: "Layer 3 access implies the possibility to submit IP packets over the network. It does not imply the possibility to listen to others' trafic on the network. You are outside the router but with a possibility to communicate in to the network."
+					// IDPS should affect the possibility of maliciousConnect 
+				-> 	exposedServices.attemptMaliciousConnect,
+					trafficRouters.forwarding, 
+					denialOfService, 
+					physicalMachines.networkAccess, 
+					virtualMachines.networkAccess
+  
+		& aRPCachePoisoning
+			info: "ARP spoofing works on all common networks, both wirebound and wireless. For WPA2Enterprise, it can be exploited due to Hole196 (cf. https://www.cwnp.com/forums/posts?postNum=300580)."
+				-> 	manInTheMiddle
+ 
+		# portSecurity
+				info: "You can use port security to restrict a port's ingress traffic by limiting the MAC addresses that are allowed to send traffic into the port."
+				rationale: "http://www.cisco.com/c/en/us/td/docs/switches/lan/catalyst6500/ios/12-2SX/configuration/guide/book/port_sec.html"
+				-> 	bypassPortSecurity 
+
+		# staticARPTables 
+				-> 	aRPCachePoisoning
+
+		| manInTheMiddle
+					info: "Attackers can sometimes intercept and tamper with communications on the IP layer. Higher-layer encryption and authentication, such as HTTPS, may still prevent the compromise of information in dataflows."
+				-> 	accessLayer2,
+					eavesdrop,
+					dataflows.manInTheMiddle,
+					trafficRouters.denialOfService
+		}
+
+	asset Wifi extends Ethernet
+		info: "Networks include Ethernet LANs, the Internet, and WiFi networks."
+		// For WPA, if the attacker is in range of wifi, a Pairwise Transient Key (PTK) can be captured if eavesdropping on a legitimate handshake between AP and station. From the PTK, the Pre-Shared Key (PSK), can be brute force guessed if it is simple. (PTK from PSK includes PBKDF2 with 4096 iterations, so guessing will be slow.)
+		// This should be modelled as folows: An unencrypted dataflow represents the handshake. The dataflow contains the PSK in the form of a Key (wrapped in encrypted Data). The PSK is then used as the encryption key of all dataflows over the WPA network. 
+		// The attacker will therefore be able to obtain the encrypted PSK. If cracked (a separate attack required), all (other) dataflows over the WPA network can be eavesdropped on.
+		// To facilitate for the end user, the pre-processor/component should automatically add the PSK, relations between the handshake dataflow and new clients, and relations between the PSK and the dataflows that flow over the network.
+
+		{ 	
+		| physicalAccess
+				info: "Physical access currently includes close-enough-to-touch as well as within-wifi-range."
+				-> 	bypassPortSecurity, 
+					sniffUnencryptedHandshake,
+					wifiTrafficRouters.evilTwinHandshakeSniff
+		
+ 		& bypassPortSecurity
+ 				-> 	uncontrolledAccess,
+ 					userLogin
+  
+		| userAuthenticate
+				->	userLogin
+
+		& userLogin
+				->	bypassAccessControl
+
+		& uncontrolledAccess
+				-> 	bypassAccessControl,
+					eavesdropOpenNetwork
+
+		# encryptedHandshake
+				->	sniffUnencryptedHandshake
+
+		& sniffUnencryptedHandshake
+				->	sniffHandshake
+
+		& sniffEncryptedHandshake
+				->	sniffHandshake
+
+		| sniffHandshake
+			info: "If unencrypted, the initial handshake, containing authentication challenges and responses, can be sniffed."
+				->	hashedCredentials.readAccess
+
+		| bypassAccessControl
+				-> 	accessLayer2,
+					wifiTrafficRouters.evilTwinMitM
+
+		# notOpen
+				info: "Some networks, such as open wifi networks, can be sniffed on the MAC layer, because the traffic is broadcasted and open."
+				-> 	uncontrolledAccess,
+					eavesdropOpenNetwork
+
+		| accessLayer3
+				info: "Layer 3 access implies the possibility to submit IP packets over the network. It does not imply the possibility to listen to others' trafic on the network. You are outside the router but with a possibility to communicate in to the network."
+					// IDPS should affect the possibility of maliciousConnect 
+				-> 	exposedServices.attemptMaliciousConnect,
+					wifiTrafficRouters.forwarding, 
+					denialOfService, 
+					physicalMachines.networkAccess, 
+					virtualMachines.networkAccess
+  
+
+		& eavesdropOpenNetwork
+				-> 	eavesdrop
+
+		| manInTheMiddle
+					info: "Attackers can sometimes intercept and tamper with communications on the IP layer. Higher-layer encryption and authentication, such as HTTPS, may still prevent the compromise of information in dataflows."
+				-> 	accessLayer2,
+					eavesdrop,
+					dataflows.manInTheMiddle,
+					wifiTrafficRouters.denialOfService
+		}
+
+	asset Router extends Service {
+
+		| rootAccess 
+				-> 	_softwareCoreRootAccess,
+					trafficNetworks.manInTheMiddle,
+					forwarding
+
+		3 firewallExists
+				<-	firewall
+				->	noFirewallProtection
+
+		| noFirewallProtection
+				info: "Firewall protection comes from (i) the existence of a (ii) correctly configured firewall."
+				-> bypassFirewall
+
+		| forwarding 
+				rationale: "Forwarding is the lightest interaction with the router, where the router simply retransmits received messages. Vulnerabilities may, however, lead to compromise of the router as well as of the associated firewall. Therefore, Forwarding leads to Connect."
+				-> 	bypassFirewall,
+					attemptMaliciousConnect,
+					// Does IPDS affect the TTC of maliciousConnect here?
+					firewall.attemptMaliciousConnect
+
+		& bypassFirewall
+				->	trafficNetworks.accessLayer3
+
+		| denialOfService 
+				-> 	trafficNetworks.denialOfService	
+	}
+
+	asset WifiRouter extends Router {
+
+		3 serverCertificate
+				info: "WPA2-Enterprise can protect the initial handshake between clients and access points by a TLS tunnel, which requires a server certificate."
+				<- certificate
+				-> bypassHandshakeEncryption
+
+		| bypassHandshakeEncryption
+	       	rationale: "WPA2-Enterprise can use PEAP, which protects the initial handshake in a TLS tunnel (some alterntives, such as EAP-MSCHAPv2, are unprotected). For TLS tunnels, the server needs a certificate. If the attacker has the certificate, or clients fail to verify, the handshake and its hashed keys can be captured for subsequent cracking attempts. A pre-shared key is used to authenticate in the initial handshake. In WPA2PSK, the handshake is unencrypted and its hashed keys can be captured for subsequent cracking attempts. PBKDF2 is used, so only dictionary attacks and low-entropy passwords are feasible to crack."
+	       	// This step should not lead directly to the evilTwin below, because access to the certificate only allows the initial handshake, in which the user credentials are checked. Then, the individual credentials of each target user need to be cracked. This is as hard as in the PSK case; PBKDF2 4096 is used.	
+				->	wifiTrafficNetworks.sniffEncryptedHandshake,
+					evilTwinMitM
+
+	    & evilTwinHandshakeSniff
+	       	rationale: "Access to the router cert (WPA2Enterprise), the pre-shared key (WPA2PSK, WPA), or that the is network open, is required for the evil twin attack. WPA2-Enterprise supports a number of EAPs - Extensible Authentication Protocols. The security depends on which EAP you use, and how you configure it. Some EAPs more vulnerable to an 'evil twin' attack than PSK, as an attacker doesn't need to brute force the key. Fortunately, a number of EAPs are secure against an evil twin. One approach is to use TLS internally; PEAP is a popular option that does this. To be secure against an evil twin, you must enable certificate verification and distribute the certificate to all your clients. (https://security.stackexchange.com/questions/46849/does-wpa2-enterprise-mitigate-evil-twin-attacks)"
+				-> 	wifiTrafficNetworks.sniffEncryptedHandshake
+
+		& evilTwinMitM
+			rationale: "A rogue hotspot can, under some circumstances, impersonate the AP and forward traffic (e.g. to the authentic AP). For open networks, a stronger signal than the authentic AP is sufficient. For WPA2-PSK, the attacker needs the PSK to complete the four-way handshake. For WPA2-Enterprise with PEAP, the attacker needs the server certificate (or that the client sloppily ignores server certificate authentication) to spoof the Radius server (to access the TLS tunnel that protects the four-way handshake) as well as the user's credentials, to complete the four-way handshake, authenticating both client and server to each other. (https://www.slideshare.net/sensepost/improvement-in-rogue-access-points-sensepost-defcon-22)"
+				->	wifiTrafficNetworks.manInTheMiddle
+	}
+}
+
+category Communication {
+
+	asset Information
+		info: "Information can be stored as data and transmitted in data flows. Data and data flows are syntactic forms of the semantics represented by the Information asset. Thus, multiple data and data flow assets can contain the same information."
+		{
+		| read
+			info: "When information is read by the attacker, any associated confidentiality costs are incurred. It is sufficient that the attacker reads a single data or data flow to breach confidentiality."
+
+		& write
+			info: "When information is written by the attacker, any associated integrity costs are incurred. The attacker must, however, compromise all data and data flows in order to breach integrity. Thus, if the records of an ATM are modified, this might incur no cost as long as the master data is untouched."
+
+		& delete
+			info: "When information is deleted by the attacker, any associated availability costs are incurred. The attacker must, however, delete all data and data flows in order to breach integrity. Thus, if malware wipes a hard drive, this might incur no cost as long as a backup is easily accessible."
+	}
+
+	asset Data
+	info: "Data is a concrete, syntactic representation of Information at rest."
+	{
+		| requestAccess
+				info: "When stored on a machine, access control needs to be granted."
+				->	userRead,
+					userWrite,
+					userDelete
+
+		| anyUserAccountRead
+				info: "A single account with read privileges (in conjuction with data access) is enough to read the data."
+				->	userRead
+
+		| anyUserAccountWrite
+				info: "A single account with write privileges (in conjuction with data access) is enough to write the data."
+				->	userWrite
+
+		| anyUserAccountDelete
+				info: "A single account with delete privileges (in conjuction with data access) is enough to delete the data."
+				->	userDelete
+
+		& userRead
+				info: "An account with read privileges in conjuction with data access allows reading of the data."
+				-> 	readAccess
+
+		& userWrite
+				info: "An account with write privileges in conjuction with data access allows writing of the data."
+				-> 	writeAccess
+
+		& userDelete
+				info: "An account with delete privileges in conjuction with data access allows deletion of the data."
+				-> 	delete
+
+		| readAccess
+				info: "An attacker that reads the data, learns the encoded information unless it is encrypted."
+				-> 	read
+
+		| writeAccess
+				info: "Tampering with data leads to altering of the contained information only if there is no untouched copy elsewhere. If data is transmitted through data flows, those data flows will also be affected by the tampering."
+				-> 	write
+
+		| deleteAccess
+				info: "Tampering with data leads to altering of the contained information only if there is no untouched copy elsewhere. If data is transmitted through data flows, those data flows will also be affected by the tampering."
+				->	delete
+
+		| read
+				info: "An attacker that reads the data, learns the encoded information."
+				->	information.read,
+					containedData.readAccess
+
+
+		| write
+				info: "Tampering with data leads to altering of the contained information only if there is no untouched copy elsewhere. If data is transmitted through data flows, those data flows will also be affected by the tampering."
+				-> 	delete,
+					information.write,
+					containedData.writeAccess,
+					targetData.write, 
+					targetData.delete,
+					dataflow.tamper
+
+		| delete
+				info: "Deletion of data leads to information loss only if there is no untouched copy elsewhere. If data is transmitted through data flows, those data flows will also be affected by the tampering."
+				->	information.delete,
+					containedData.deleteAccess
+
+		| denyAccess
+			info: "Denial-of-service attacks can make data unavailable."
+
+	    # sufficientEntropy
+	    	info: "Keys need to feature suffciently high entropy to be uncrackable. 12 alphanumeric-character passwords, representing an entropy of about 70 bits contain sufficient entropy even for MD5. For online cracking, speeds are very much slower, around 1 Hash/s. Therefore, 70 bits is clearly excessive, even without back-off, so entropy around, say, 40 bits should also be fine."
+	    	rationale: "With 300 Gigahashes/second in 2017, even MD5 will require over 50 years to crack 12 alphanumeric-character passwords, representing an entropy of about 70 bits. Thus, we define 70 bits as sufficient entropy. (Update this number as hardware improves.)"
+	    		-> 	containingData.insufficientEntropyOfKeyOrContainedData
+
+		# unpredictable
+			info: "If the information is predictable (e.g. default passwords), it is easier to crack when encrypted. For offline cracking, we define a predictable password as one that can be found (with a frequency higher than 1) in a dictionary such as RockYou. Even with 4096 iterations bcrypt, such passwords are cracked in an hour. (A slow bcrypt cracker does 100 hashes/second. With 90-95% probability, it will be enough to try the 360 000 most popular passwords in RockYou to find one randomly drawn from RockYou's accounts.)"			
+				-> 	containingData.keyOrContainedDataPredictable
+
+	    | attemptBruteForceAttack
+	    		//Placeholder for EncryptedData
+
+	    | attemptDictionaryAttack
+	    		//Placeholder for EncryptedData
+
+	    | insufficientEntropyOfKeyOrContainedData
+	    		//Placeholder for EncryptedData
+
+	    | keyOrContainedDataPredictable
+	    		//Placeholder for EncryptedData
+
+	    & bruteForceAttack 
+	    		//Placeholder for EncryptedData
+
+		& dictionaryAttack
+	    		//Placeholder for EncryptedData
+	}
+
+	asset EncryptedData extends Data {
+		| readAccess
+			info: "The encrypted data can be read, but not deciphered."
+				-> 	decryptWithKey,
+					exploitBrokenCryptography,
+					exploitBrokenImplementation,
+					attemptBruteForceAttack,
+					attemptDictionaryAttack
+
+	    & exploitBrokenCryptography
+	    		-> read
+
+	    & exploitBrokenImplementation
+	    		-> read
+
+	    | accessKey
+	    		-> decryptWithKey
+
+	    & decryptWithKey
+	    		->	read
+
+	    | attemptBruteForceAttack
+	    		->	bruteForceAttack
+
+	    | attemptDictionaryAttack
+	    		->	dictionaryAttack
+
+	    & bruteForceAttack [UniformDistribution(0.0, 100.0)]
+	    	info: "A raw brute-force attack is always possible, but feasible only sometimes. The distribution parameter (time for search space exhaustion) depends on the encryption scheme, the attacked entropy (e.g. key entropy), and the attacker equipment. It is therefore determined in crypto-suite-specializations of EncryptedData, e.g. MD5EncryptedData."
+	    	rationale: "Raw brute-forcing is a linear process that has an equal chance of stumbling over the answer at any point between the start of the search and the complete exhaustion ofthe search space."
+			// APT's might be expected to have a factor 10-100 times better performance than anything publically known? (http://www.dagbladet.no/nyheter/nis-aquires-supercomputer/61602521)
+	    		-> 	read
+
+		& dictionaryAttack [GammaDistribution(0.3, 0.25)]
+			info: "If the information is predictable (e.g. default passwords), it is easier to crack when encrypted. For offline cracking, we define a predictable password as one that can be found (with a frequency higher than 1) in a dictionary such as RockYou. Even with 4096 iterations bcrypt, such passwords are cracked in an hour. (A slow bcrypt cracker does 100 hashes/second. With 90-95% probability, it will be enough to try the 360 000 most popular passwords in RockYou to find one randomly drawn from RockYou's accounts.) "
+			rationale: "The nominal Gamma distribution scale factor for RockYou is 2,000,000 (GammaDistribution(0.3, 2000000)). It should be divided by the number of hashes that can be brute-forced per day. For MD5, this would be 200 GH/s*3600*24. Even with 4096 iterations bcrypt, predictable passwords are cracked in an hour. (A slow bcrypt cracker does 100 hashes/second. With 90-95% probability, it will be enough to try the 360 000 most popular passwords in RockYou to find one randomly drawn from RockYou's accounts.) However, for online cracking, the number of hashes per day might be 3600*24, leading to GammaDistribution[0.3, 23], which would mean about a month for 95% cracking probability (Probability[t < 30, t belongs to GammaDistribution[0.3, 23]] = 0.945)."
+			// APT's might be expected to have a factor 10-100 times better performance than anything publically known? (http://www.dagbladet.no/nyheter/nis-aquires-supercomputer/61602521)
+				->	read
+
+	    | insufficientEntropyOfKeyOrContainedData
+	    		-> bruteForceAttack
+
+	    | keyOrContainedDataPredictable
+	    		-> 	dictionaryAttack
+	}
+
+	asset EncryptedAuthenticatedData extends EncryptedData {
+
+		| writeAccess
+				info: "Writing does not lead to tampering unless authentication (e.g. signing) can be achieved."
+				-> 	readAccess,
+					signWithKey,
+					exploitBrokenImplementation,
+					attemptBruteForceAttack,
+					attemptDictionaryAttack,
+					delete
+
+	    & exploitBrokenCryptography
+	    		-> 	read,
+	    			write
+
+	    & exploitBrokenImplementation
+	    		-> 	read,
+	    			write
+
+	    | accessKey
+	    		-> 	decryptWithKey,
+	    			signWithKey
+
+	    & signWithKey
+	    		->	write
+
+	    & bruteForceAttack [UniformDistribution(0.0, 100.0)]
+	    	info: "A raw brute-force attack is always possible, but feasible only sometimes. The distribution parameter (time for search space exhaustion) depends on the encryption scheme, the attacked entropy (e.g. key entropy), and the attacker equipment. It is therefore determined in crypto-suite-specializations of EncryptedData, e.g. MD5EncryptedData."
+	    	rationale: "Raw brute-forcing is a linear process that has an equal chance of stumbling over the answer at any point between the start of the search and the complete exhaustion ofthe search space."
+			// APT's might be expected to have a factor 10-100 times better performance than anything publically known? (http://www.dagbladet.no/nyheter/nis-aquires-supercomputer/61602521)
+	    		-> 	read,
+	    			write
+
+		& dictionaryAttack [GammaDistribution(0.3, 0.25)]
+			info: "If the information is predictable (e.g. default passwords), it is easier to crack when encrypted. For offline cracking, we define a predictable password as one that can be found (with a frequency higher than 1) in a dictionary such as RockYou. Even with 4096 iterations bcrypt, such passwords are cracked in an hour. (A slow bcrypt cracker does 100 hashes/second. With 90-95% probability, it will be enough to try the 360 000 most popular passwords in RockYou to find one randomly drawn from RockYou's accounts.) For online cracking (say 1 Hash/sec), "
+			rationale: "The Gamma distribution scale factor should be divided by the number of hashes that can be brute-forced per day. For MD5, this would be 200 GH/s*3600*24. Even with 4096 iterations bcrypt, predictable passwords are cracked in an hour. (A slow bcrypt cracker does 100 hashes/second. With 90-95% probability, it will be enough to try the 360 000 most popular passwords in RockYou to find one randomly drawn from RockYou's accounts.) However, for online cracking, the number of hashes per day might be 360*24, leading to GammaDistribution[0.3, 231], which would mean about 300 days for 95% cracking probability."
+			// APT's might be expected to have a factor 10-100 times better performance than anything publically known? (http://www.dagbladet.no/nyheter/nis-aquires-supercomputer/61602521)
+				->	read,
+					write
+	}
+
+	asset Dataflow
+	info: "Dataflow is a channel that contains Data in transit."
+	{
+		| eavesdrop
+				info: "An attacker that eavesdrops on the data flow, can access the contained data. That data may, in turn, be encrypted, thus preventing a breach of confidentiality."
+				-> 	data.readAccess,
+					virtualNetwork.eavesdrop
+
+		| manInTheMiddle
+				info: "An attacker that man-in-the-middles the data flow, can control the contained data. That data may, in turn, be encrypted and authenticated, thus preventing a breach of confidentiality and integrity."
+				-> 	eavesdrop, 
+					denialOfService, 
+					requestAccess,
+					respondAccess
+
+		| tamper
+				->	respond,
+					request,
+					virtualNetwork.manInTheMiddle
+
+		| denialOfService
+				info: "A denial-of-service-attack on the dataflow makes the contained data inaccessible. The information may, however also be available elsewhere."
+				->	data.deleteAccess
+
+		| requestAccess
+				->	data.writeAccess, 
+					data.readAccess, 
+					data.deleteAccess,
+					writeAccessNoModelledData,
+					request		
+
+		& request
+				info: "Tampering with data flows leads to altering of the contained information only if there is no untouched copy elsewhere. If data flows update data at rest, that data will also be affected by the tampering."
+				rationale: "Both request and respond could affect the related information (cf. HTTP GET and HTTP POST) and data, so we do not distinguish between them. Instead, the flow of information is specified with the Propagation relationship."
+				-> 	services.legitimateConnect,
+					maliciousRequestNoIDPS,
+					maliciousRequestBypassIDPS
+
+		& maliciousRequestNoIDPS
+			info: "IDPS's can detect and prevent some types of malicious requests, thus reducing the probability of vulnerability exploitation."
+				->	maliciousRequest
+
+		| maliciousRequestBypassIDPS [ExponentialDistribution(6.13)]
+			info: "IDPS's do not prevent all malicious requests, but it typically takes time for the attacker to bypass."
+			rationale: "The time to bypass a tuned and updated IDPS is studied in 'T. Sommestad, H. Holm, M. Ekstedt, Estimates of success rates of remote arbitrary code execution attacks, Information Management & Computer Security (2012)' and 'H.Holm, T.Sommestad, U.Franke, M.Ekstedt, Success rate of remote code execution attacks – expert assessments and observations, Journal of Universal Computer Science 18 (6) (2012)'"
+			// These numbers should be updated, as encryption has become pervasive
+				->	maliciousRequest
+
+		| maliciousRequest
+				->	services.attemptMaliciousConnect
+
+		| respondAccess
+				->	data.writeAccess, 
+					data.readAccess, 
+					data.deleteAccess,
+					writeAccessNoModelledData,
+					respond
+					
+		& respond
+				info: "Tampering with data flows leads to altering of the contained information only if there is no untouched copy elsewhere. If data flows update data at rest, that data will also be affected by the tampering."
+				rationale: "Both request and respond could affect the related information (cf. HTTP GET and HTTP POST) and data, so we do not distinguish between them. Instead, the flow of information is specified with the Propagation relationship."
+				-> 	clients.legitimateConnect,
+					executingClients.rootAccess,
+					maliciousRespondNoIDPS,
+					maliciousRespondBypassIDPS
+
+		& maliciousRespondNoIDPS
+			info: "IDPS's can detect and prevent some types of malicious responses, thus reducing the probability of vulnerability exploitation."
+				->	maliciousRespond
+
+		| maliciousRespondBypassIDPS [ExponentialDistribution(6.13)]
+			info: "IDPS's do not prevent all malicious responses, but it typically takes time for the attacker to bypass."
+			rationale: "The time to bypass a tuned and updated IDPS is studied in 'T. Sommestad, H. Holm, M. Ekstedt, Estimates of success rates of remote arbitrary code execution attacks, Information Management & Computer Security (2012)' and 'H.Holm, T.Sommestad, U.Franke, M.Ekstedt, Success rate of remote code execution attacks – expert assessments and observations, Journal of Universal Computer Science 18 (6) (2012)'"
+			// These numbers should be updated, as encryption has become pervasive
+				->	maliciousRespond
+
+		| maliciousRespond
+				->	clients.attemptMaliciousConnect
+
+		3 noModelledData
+				info: "If the dataflow does not explicitly model the contained data, results should still be reasonable. We assume unencrypted data, so e.g. MitM leads to respond and request."
+				<-	data
+				->	writeNoModelledData
+
+		| writeAccessNoModelledData
+				info: "If the dataflow does not explicitly model the contained data, results should still be reasonable. We assume unencrypted data, so e.g. MitM leads to respond and request."
+				->	writeNoModelledData
+
+		& writeNoModelledData
+				info: "If the dataflow does not explicitly model the contained data, results should still be reasonable. We assume unencrypted data, so e.g. MitM leads to respond and request."
+				->	tamper	
+
+		3 idpsExists
+				<-	idps
+				->	noIDPSProtection
+
+		| noIDPSProtection
+				info: "IDPS protection comes from (i) the existence of a (ii) correctly configured IDPS."
+				->	maliciousRequestNoIDPS,
+					maliciousRespondNoIDPS
+	}
+}
+
+category Security {
+	asset Account {
+		& multiFactorAuthenticate
+			info: "Multiple keys imply multi-factor authentication (all keys are needed)."
+			// We can easily extend this to a muliple alternative multi-factor case (many alternative keys, possibly in them selves multi-factor).
+				->	authenticate
+
+		| attemptCrack
+				-> 	authenticationServices.attemptToBreakImplementation,
+					attemptBruteForceAttack,
+					attemptDictionaryAttack
+
+		| authenticate
+				-> 	rootAccessedMachines.rootAuthenticate, 
+					userAccessedMachines.userAuthenticate,
+					networks.userAuthenticate,
+					readData.anyUserAccountRead,
+					writtenData.anyUserAccountWrite,
+					deletedData.anyUserAccountDelete,
+					authenticatees.authenticate
+
+		| backOffDisabled
+			info: "The number of logon attempts is limited."
+				->	credentials.bruteForceAttack
+
+		| attemptBruteForceAttack
+				-> credentials.attemptBruteForceAttack
+
+		| attemptDictionaryAttack
+				-> credentials.attemptDictionaryAttack
+
+	    & exploitBrokenImplementation
+	    		-> 	authenticate
+	}
+
+	asset Key extends Data {
+	    | read
+	    		-> 	accounts.multiFactorAuthenticate,
+	    			encryptedData.accessKey,
+	    			routers.bypassHandshakeEncryption
+
+	    // The below is not quite right. It assumes that the encryption of the containing data needs to be broken. But it is possible to brute force or dictionary-attack a password in an authentication service without involving any cryptography. The authentication service might, e.g., store the passwords in clear text.
+	    | attemptBruteForceAttack
+	    		->	containingData.attemptBruteForceAttack
+
+	    | attemptDictionaryAttack
+	    		->	containingData.attemptDictionaryAttack
+
+	    # sufficientEntropy
+	    	info: "Keys need to feature suffciently high entropy to be uncrackable. 12 alphanumeric-character passwords, representing an entropy of about 70 bits contain sufficient entropy even for MD5. For online cracking, speeds are very much slower, around 1 Hash/s. Therefore, 70 bits is clearly excessive, even without back-off, so entropy around, say, 40 bits should also be fine."
+	    	rationale: "With 300 Gigahashes/second in 2017, even MD5 will require over 50 years to crack 12 alphanumeric-character passwords, representing an entropy of about 70 bits. Thus, we define 70 bits as sufficient entropy. (Update this number as hardware improves.)"
+	    		-> 	containingData.insufficientEntropyOfKeyOrContainedData,
+	    			encryptedData.insufficientEntropyOfKeyOrContainedData
+
+		# unpredictable
+				-> 	containingData.keyOrContainedDataPredictable,
+					encryptedData.keyOrContainedDataPredictable
+	}
+
+	asset Firewall extends Service 
+		info: "A firewall service may be running on its own hardware, or may be co-loated with a router on the same host. If functioning properly, it restricts traffic through the router."
+		// Firewalls will not stop attacks over modelled dataflows. Such dataflows are assumed to be allowed by the firewall. 
+		{
+		# correctlyConfigured
+				info: "An incorrectly configured firewall is defined as one where the attacker will be able to gain layer-3 access to all of the protected network, thus connecting to all exposed network services."
+				-> router.noFirewallProtection
+	}
+
+	asset IDPS extends Service {
+		# correctlyConfigured
+				-> dataflows.noIDPSProtection
+	}
+}
+
+category People {
+	asset Organization {
+		| phishingAttempt
+				-> employees.phishingAttempt
+	}
+
+	asset User {
+		| phishingAttempt
+				->	phishUnawareUser,
+					phishAwareUser
+
+		| phishAwareUser [ExponentialDistribution(13.99)]
+			// I think these number are too high, reaching 30% in 5 days
+				->	phish
+
+		& phishUnawareUser [ExponentialDistribution(5.92)]
+			// I think these number are too high, reaching 70% in 5 days
+				->	phish
+
+		| phish
+				->	accounts.authenticate
+
+		# securityAware
+				->	phishUnawareUser
+	}
+}
+
+category Zone {	
+	asset PhysicalZone{
+		| compromise
+			-> 	physicalMachines.physicalAccess,
+				networks.physicalAccess
+	}
+}
+
+
+associations {
+	Machine 		[machines]						*	<--	ProductInstallation				--> 1	[product]						Product
+	PhysicalMachine [physicalMachines]				*	<--	PhysicalAccess 					--> 0-1	[physicalZone]					PhysicalZone
+	Machine			[executor]						0-1	<-- Execution						--> *	[executees]						Software
+	Account 		[rootAccount]					*	<-- RootExecutionPrivileges			--> *	[rootAccessedMachines]	 		Machine
+		info: "Root accounts have access to all data and all executees."
+	Account 		[userAccounts]					*	<-- UserExecutionPrivileges			--> *	[userAccessedMachines]			Machine
+		info: "User accounts have access according to specified access relations. If there are no defined accounts, simply connecting will lead to userAccess."
+	Account 		[authenticatedAccounts]			*	<-- AccountAuthentication			--> 1	[authenticationServices]		AuthenticationService
+		info: "Conceptually, authentication is separated from access control (obvious in the case of e.g. Radius servers). authenticationServices provide the authentication service."
+	Account 		[assignedAccounts]				1-* <-- Assignment						--> *	[assignedSoftwares] 			Software
+		info: "Software needs to be granted certain privileges when executing on a platform. When the software is compromised, the attacker gains its privileges on the platform."
+	Account 		[authenticators]				*	<-- Authentication					--> *	[authenticatees]		 		Account
+		// When an association is defined between two instances of the same class, the direction can only be deciphered using the role name. In securiCAD, this needs to be addressed, as currently, only the association name is visible.
+	Account 		[accounts]						*  	<-- Credentials						--> *	[credentials] 					Key
+	Account 		[readingAccounts]				*  	<-- Read							--> *	[readData] 						Data
+	Account 		[writingAccounts]				*  	<-- Write							--> *	[writtenData] 					Data
+	Account 		[deletingAccounts]				*  	<-- Delete							--> *	[deletedData] 					Data
+	Data			[containingData] 				*	<-- Containment 					--> *	[containedData] 				Data
+	Data			[data] 							*	<-- Representation 					--> 0-1	[information] 					Information
+		info: "The data constitutes a syntactic representation at rest of the information."
+	Data			[data] 							*	<-- Storage 						--> *	[machines]	 					Machine
+	EncryptedData 	[encryptedData]					* 	<-- Encryption 						--> 0-1 [encryptionKey] 				Key
+		info: "Data that is encrypted without a key is hashed, since hashing is equivalent to encrypting and throwing away the key."
+		// I think that is true, but we need to check that.
+	EncryptedData 	[encryptedData]					* 	<-- Encryption 						--> 1 	[encryptionService] 			EncryptionService
+	Network 		[trafficNetworks] 				* 	<-- Connection 						--> * 	[trafficRouters] 				Router
+	Network 		[networks] 						* 	<-- PhysicalAccess 					--> * 	[physicalZones] 				PhysicalZone
+	Network 		[networks]						* 	<-- Communication 					--> *	[dataflows] 					Dataflow
+	Ethernet 		[exposureNetworks]				*   <-- NetworkExposure 				-->	*	[exposedServices] 				NetworkService
+        rationale: "PSK belongs to the whole network (all parties have it), and is broadcast in the 4-way handshake of WPA PSK."
+	Ethernet 		[networks] 						* 	<-- Connection 						--> * 	[physicalMachines] 				PhysicalMachine
+		info: "Physical machines can be connected to networks. If services are not explicitly connected to other networks, it is assumed that they are communicating over the physically connected one."
+	Ethernet 		[networks] 						* 	<-- Connection 						--> * 	[virtualMachines] 				VirtualMachine
+	Wifi 		 	[wifiTrafficNetworks] 			* 	<-- WifiConnection 					--> * 	[wifiTrafficRouters] 			WifiRouter
+    Wifi 	  		[networks]       				*   <-- Authentication       			--> 0-1 [authenticationService] 		AuthenticationService
+    Wifi 	  		[networks]       				*   <-- UserExecutionPrivileges			--> 0-1 [userAccounts] 					Account
+    Wifi 		  	[networks]       				*   <-- InitialHandshake				--> *	[hashedCredentials] 			EncryptedData
+    WifiRouter 		[routers]						*	<-- CertificateAuthentication		--> 0-1	[certificate]					Key
+	Dataflow		[dataflows]						* 	<-- ClientRequest 					--> *	[clients] 						Client
+	Dataflow		[dataflows]						* 	<-- ServerResponse 					--> *	[services] 						NetworkService
+	Dataflow		[programDistributionFlow]		* 	<-- ProgramDistributionToClient		--> *	[executingClients] 				Client
+		info: "Some servers distribute programs to clients, e.g. software updates, or Web applications."
+	Dataflow		[programDistributionFlow]		* 	<-- ProgramDistributionFromServer 	--> *	[providingServices] 			NetworkService
+		info: "Some servers distribute programs to clients, e.g. software updates, or Web applications."
+	Dataflow		[dataflow]						0-1 <-- Transmission 					--> 0-1	[data] 							Data
+	Dataflow		[realizingDataflow]				* 	<-- NetworkVirtualization 			--> 0-1	[virtualNetwork] 				Network
+		info: "The dataflow transmits data."
+		rationale: "A dataflow cannot feature multiple data, as these may have different properties, e.g. one authenticated and one not."
+	Data 			[sourceData]					* 	<-- Propagation						--> *	[targetData] 					Data
+		info: "The information contents of source data become part of the contents of target data."
+		// Encryption relations should be autogenerated from the sourceData's encryptionService to the targetData.
+	Firewall		[firewall]						0-1	<-- FirewallProtection				--> 1	[router]						Router
+	IDPS			[idps]							*	<-- IDPSProtection					--> *	[dataflows]						Dataflow
+	Organization	[organizations]					*	<-- Employment						-->	* 	[employees]						User
+	User 			[users]							*  	<-- UserAccount 					--> *	[accounts]						Account
+		info: "An IDPS detects and prevents some malicious requests and responses in dataflows."
+}
+
