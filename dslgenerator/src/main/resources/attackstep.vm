@@ -1,0 +1,100 @@
+
+#set($attackStepTypeString="")
+
+#if ($attackStep.getSuperAttackStepName()!="")
+   #set($attackStepTypeString = $attackStep.getSuperAttackStepName())
+#else
+   #if($attackStep.getAttackStepType()=="&")
+      #set($attackStepTypeString = "LocalAttackStepMax")
+   #elseif ($attackStep.getAttackStepType()=="|")
+      #set($attackStepTypeString = "LocalAttackStepMin")
+   #elseif ($attackStep.getAttackStepType()=="t")
+      #set($attackStepTypeString = "CPT_AttackStep")
+   #end
+#end
+#set($baseAttackStep = $attackStep.getBaseAttackStep())
+#if(!$baseAttackStep)
+   #set($baseAttackStep = $attackStep)
+#end
+public class $attackStep.getCapitalizedName() extends $attackStepTypeString {
+   public $attackStep.getCapitalizedName()(${baseAttackStep.getAsset().getCapitalizedName()}.${baseAttackStep.getCapitalizedName()} other) {
+      super(other);
+   }
+
+   public $attackStep.getCapitalizedName()() {
+   }
+   #set($parentPointers = $attackStep.getParentPointers())
+   #if ($parentPointers.size()>0)
+      @Override
+      protected void setExpectedParents(ConcreteSample sample) {
+         #if ($attackStep.getSuperAttackStepName()!="")
+           super.setExpectedParents(sample);
+         #end
+         #if ($attackStep.getExistenceRequirementRoles().size() > 0)
+            if (${attackStep.getExistenceRequirementRoles().get(0)}!=null) {
+         #end
+         #foreach ($parentPointer in $parentPointers)
+            #set($disableString = "")
+            #if($parentPointer.getAttackStep().isDefense())
+               #set($disableString = ".disable")
+            #end
+            #set($parentRoleName = $parentPointer.getRoleName())
+            #set($parentAssetNameAccordingToAttackStep = $parentPointer.getAttackStep().getAsset().getName())
+            #set($parentAssetNameAccordingToAssociation = "")
+            #if ($parentPointer.getAssociation())
+               #set($parentAssetNameAccordingToAssociation = $parentPointer.getAssociation().getAssetName($parentRoleName))
+            #end
+            #set($parentShortStepName = "$parentPointer.getAttackStep().getName()$disableString")
+            #set($parentString = "")
+            #if ($parentPointer.getAttackStep().getAsset().superAssets().contains($attackStep.getAsset()))
+               #set($parentString = $parentShortStepName)
+            #else
+               #set($parentString = "${parentRoleName}.${parentShortStepName}")
+            #end
+            #set($mainExpressionString = "")
+            #if ($parentPointer.getMultiplicity()=="1")
+               #if($parentRoleName!="")
+                  if ($parentRoleName(sample) != null) {
+                     sample.addExpectedParent(this, ${parentRoleName}(sample).$parentShortStepName);
+                  }
+                  else {
+                     System.out.println("Error in name: Exactly one $parentRoleName must be connected to each $attackStep.getAsset().getName()");
+                  }
+               #else
+                  sample.addExpectedParent(this,$parentString);
+               #end
+            #end
+
+            #if ($parentPointer.getMultiplicity()=="0-1")
+               if (${parentRoleName}(sample) != null) {
+               #if ($parentAssetNameAccordingToAssociation==$parentAssetNameAccordingToAttackStep)
+                  #if ($parentRoleName!="")
+                     sample.addExpectedParent(this,${parentRoleName}(sample).${parentShortStepName} );
+                  #else
+                     sample.addExpectedParent(this,$parentString);
+                  #end
+               #else
+                  if($CompilerModel.decapitalize($parentRoleName)(sample) instanceof $parentAssetNameAccordingToAttackStep) {
+                     sample.addExpectedParent(this,(($parentAssetNameAccordingToAttackStep) $CompilerModel.decapitalize($parentRoleName)(sample)).$parentShortStepName);
+                  }
+               #end
+               }
+            #end
+
+            #if ($parentPointer.getMultiplicity()=="*")
+               #parse("expectedparents_many_loop.vm")
+            #end
+
+            #if ($parentPointer.getMultiplicity()=="*" || $parentPointer.getMultiplicity()=="1-*")
+               if (${parentRoleName} (sample) != null) {
+                  #parse("expectedparents_many_loop.vm")
+               }
+            #end
+         #end
+         #if ($attackStep.getExistenceRequirementRoles().size() > 0)
+            }
+         #end
+      }
+   #end
+   #parse("updatechildren.vm")
+}

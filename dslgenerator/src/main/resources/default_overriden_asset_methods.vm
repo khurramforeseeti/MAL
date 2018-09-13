@@ -1,0 +1,42 @@
+@Override
+public ImmutableSet<AttackStep> getAttackSteps() {
+   return attackSteps;
+}
+
+@Override
+public ImmutableSet<Defense> getDefenses() {
+   return defenses;
+}
+
+@Override
+public String getDescription() {
+   return "";
+}
+
+public class LocalAttackStepMin extends AttackStepMin {
+   @Override
+   public FClass getContainerFClass() {
+      return ${asset.getName()}.this;
+   }
+   LocalAttackStepMin() {}
+   LocalAttackStepMin(LocalAttackStepMin other) {
+      super(other);
+   }
+}
+
+public class LocalAttackStepMax extends AttackStepMax {
+
+   @Override
+   public FClass getContainerFClass() {
+    return ${asset.getName()}.this;
+   }
+
+   LocalAttackStepMax() {}
+
+   LocalAttackStepMax(LocalAttackStepMax other) {
+      super(other);
+   }
+   public double defaultLocalTtc(BaseSample sample, AttackStep caller)  {
+      return 0.00001157407;
+   }
+}

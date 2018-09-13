@@ -1,0 +1,84 @@
+package $packageName;
+#foreach( $import in $importList )
+  import $import;
+#end
+
+@DisplayClass(supportCapexOpex = false, category = Category.Attacker)
+@TypeName(name = "Attacker")
+public class Attacker extends AbstractAttacker {
+
+  public Attacker() {
+    this(DefaultValue.False);
+  }
+
+  public Attacker(DefaultValue val) {
+    firstSteps = new FProbSet<>();
+    fillElementMap();
+  }
+
+  public Attacker(Attacker other) {
+    super(other);
+    firstSteps = new FProbSet<>();
+    entryPoint = new EntryPoint(other.entryPoint);
+    fillElementMap();
+  }
+
+  @Override
+  public String getConnectionValidationErrors(String sourceFieldName, FClass target, String targetFieldName) {
+    if (Attacker.class.isAssignableFrom(target.getClass())) {
+      return "Attacker can not be connected to other Attackers";
+    }
+    return getConnectionValidationErrors(target.getClass());
+  }
+
+  @Override
+  protected void registerAssociations() {
+    AssociationManager.addSupportedAssociationMultiple(this.getClass(),getName(1),AttackStep.class,0,AssociationManager.NO_LIMIT,BaseLangLink.Attacker_AttackStep);
+
+  }
+
+  @Override
+  public ImmutableSet<AttackStep> getAttackSteps() {
+    return ImmutableSet.copyOf(new AttackStep[] {entryPoint});
+  }
+
+  @Override
+  public ImmutableSet<Defense> getDefenses() {
+    return ImmutableSet.copyOf(new Defense[] {});
+  }
+
+  @TypeName(name = "EntryPoint")
+  public class EntryPoint extends AbstractAttacker.EntryPoint {
+    public EntryPoint() {}
+
+    public EntryPoint(AbstractAttacker.EntryPoint other) {
+      super(other);
+    }
+
+    @Override
+    public FClass getContainerFClass() {
+      return Attacker.this;
+    }
+
+    @Override
+    public Set<AttackStep> getAttackStepChildren() {
+      return FClass.toSampleSet(((Attacker) getContainerFClass()).firstSteps, null);
+    }
+  }
+
+  @Override
+  public boolean areAssociationsPublic() {
+    return false;
+  }
+
+  @Override
+  public boolean areModelElementsPublic() {
+    return false;
+  }
+
+  @Override
+  public boolean isAttacker() {
+    return true;
+  }
+
+}

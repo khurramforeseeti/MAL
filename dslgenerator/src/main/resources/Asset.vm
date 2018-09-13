@@ -1,0 +1,154 @@
+package $packageName;
+#foreach( $import in $importList )
+  import $import;
+#end
+@DisplayClass(category = Category.$asset.getCategory()
+#if( $asset.getMandatoryChildren().size())
+  #set($coma="")
+  , mandatoryChildren = {
+     #foreach($manAsset in $asset.getMandatoryChildren())
+       $coma $manAsset.name.class
+       #set($coma=",")
+     #end
+   }
+#end
+
+#if( $asset.getNonMandatoryChildren().size())
+  #set($coma="")
+  , mandatoryChildren = {
+     #foreach($nonmanAsset in $asset.getNonMandatoryChildren())
+       $coma $nonmanAsset.name.class
+       #set($coma=",")
+     #end
+   }
+#end
+)
+@TypeName(name = "$asset.getName()")
+public #if( $asset.isAbstractAsset() ) abstract #end class $asset.getName()   #if( $asset.getSuperAssetName()!="" ) extends $asset.getSuperAssetName() #else extends MultiParentAsset #end {
+   #if( $asset.getSuperAssetName()=="" )
+      protected ImmutableSet<AttackStep> attackSteps;
+      protected ImmutableSet<Defense> defenses;
+   #end
+   #set($number=1)
+   #foreach( $association in $model.getAssociations($asset) )
+      @Association(index = $number, name = "$association.getRightRoleName()")
+      #if($association.isSetforLeftAsset())
+         public FProbSet<$association.getRightAssetName()> $association.getRightRoleName() = new FProbSet<>();
+      #else
+         public FProb<$association.getRightAssetName()> $association.getRightRoleName();
+      #end
+      #set($number=$number + 1)
+   #end
+   #foreach( $attackStep in $asset.getAttackSteps() )
+      #set($display="")
+      #if($attackStep.getSuperAttackStepName()=="")
+         #if(!$attackStep.isHiddenAttackStep() || $attackStep.isDisplayableDefense())
+            #set($display="@Display")
+         #end
+         #if(!$attackStep.isDefense())
+            @Association(index = $number, name = "$attackStep.getName()")
+         #end
+         $!display
+         public $attackStep.getCapitalizedName() $attackStep.getName();
+         #set($number=$number + 1)
+      #end
+   #end
+
+   #set($defenses=$asset.defensesExcludingExistenceRequirements())
+   #if($defenses.size()==0)
+      public $asset.getCapitalizedName()(DefaultValue val) {
+         this();
+      }
+      public $asset.getCapitalizedName()(){
+         initAttackStepsWithDefault();
+         initAttackStepAndDefenseLists();
+      }
+   #else
+      public $asset.getCapitalizedName()(){
+         this(DefaultValue.False);
+      }
+      #set($coma="")
+      public $asset.getCapitalizedName()(DefaultValue val) {
+         this( #foreach($defense in $defenses) $!coma val.get() #set($coma=",") #end );
+      }
+      #set($coma="")
+      public $asset.getCapitalizedName() ( #foreach($defense in $defenses) $!coma boolean is$defense.getCapitalizedName() #set($coma=",") #end ) {
+         #foreach($defense in $defenses)
+            $defense.getName() = new $defense.getCapitalizedName()(is$defense.getCapitalizedName());
+         #end
+         #foreach($defense in $asset.defensesWithExistenceRequirementsOnly())
+            $defense.getName() = new $defense.getCapitalizedName()(false);
+         #end
+         initAttackStepsWithDefault();
+         initAttackStepAndDefenseLists();
+      }
+
+   #end
+
+      public $asset.getCapitalizedName()($asset.getCapitalizedName() other) {
+         super(other);
+         #foreach($defense in $defenses)
+            $defense.getName() = new $defense.getCapitalizedName()(other.$defense.getName());
+         #end
+         #foreach( $attackStep in $asset.attackStepsExceptDefensesAndExistence() )
+            $attackStep.getName() = new $attackStep.getCapitalizedName()(other.$attackStep.getName());
+         #end
+         initAttackStepAndDefenseLists();
+      }
+
+   private void initAttackStepAndDefenseLists() {
+      #set($coma="")
+      defenses = ImmutableSet.of( #foreach($defense in $asset.defenses()) $!coma $defense.getName() #set($coma=",") #end );
+      #set($coma="")
+      attackSteps = ImmutableSet.of(
+         #foreach($attackStep in $asset.attackStepsExceptDefensesAndExistence()) $!coma $attackStep.getName() #set($coma=",") #end
+         #foreach($defense in $asset.defenses()) $!coma ${defense.getName()}.disable #set($coma=",") #end
+      );
+      fillElementMap();
+   }
+
+   protected void initAttackStepsWithDefault() {
+      #foreach($attackStep in $asset.attackStepsExceptDefensesAndExistence())
+         $attackStep.getName() = new $attackStep.getCapitalizedName()();
+      #end
+   }
+
+   public void registerAssociations() {
+      #if( $asset.getSuperAssetName()!="" )
+         super.registerAssociations();
+      #end
+      #foreach( $association in $model.getAssociations($asset) )
+         #set($oppositeClass = $association.getTargetAssetName($asset))
+         #set($oppositeRole = $association.getTargetRoleName($asset))
+         #set($linkText = $model.getLinks().get($association))
+         #if ($association.getRightMultiplicity()=="*")
+            AssociationManager.addSupportedAssociationMultiple(this.getClass(), "$oppositeRole", ${CompilerModel.capitalize($oppositeClass)}.class, AutoLangLink.$linkText);
+         #elseif ($association.getRightMultiplicity()=="1-*")
+            AssociationManager.addSupportedAssociationMultiple(this.getClass(), "$oppositeRole", ${CompilerModel.capitalize($oppositeClass)}.class, 1, AssociationManager.NO_LIMIT, AutoLangLink.$linkText);
+         #elseif ($association.getRightMultiplicity()=="0-1")
+            AssociationManager.addSupportedAssociationSingle(this.getClass(), "$oppositeRole", ${CompilerModel.capitalize($oppositeClass)}.class, AutoLangLink.$linkText);
+         #else
+            AssociationManager.addSupportedAssociationMandatorySingle(this.getClass(), "$oppositeRole", ${CompilerModel.capitalize($oppositeClass)}.class, AutoLangLink.$linkText);
+         #end
+      #end
+   }
+
+   #foreach( $attackStep in $asset.getAttackSteps() )
+      #if($attackStep.isDefense())
+         #parse("defense.vm")
+      #else
+         #parse("attackstep.vm")
+      #end
+   #end
+
+   #foreach( $association in $model.getAssociations($asset) )
+      #if ($association.getRightMultiplicity()=="*" || $association.getRightMultiplicity()=="1-*")
+         public Set<$CompilerModel.capitalize($association.getRightAssetName())> $association.getRightRoleName()(BaseSample sample) { return toSampleSet($association.getRightRoleName(), sample); }
+      #else
+         public $CompilerModel.capitalize($association.getRightAssetName()) $association.getRightRoleName()(BaseSample sample) { return toSample($association.getRightRoleName(), sample); }
+      #end
+   #end
+
+   #parse("default_overriden_asset_methods.vm")
+
+}

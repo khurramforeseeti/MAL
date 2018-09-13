@@ -1,0 +1,31 @@
+#if ($attackStep.getChildPointers().size()>0)
+   @Override
+   public Set<AttackStep> getAttackStepChildren()  {
+      Set<AttackStep> set = new HashSet<>( #if(!$attackStep.isSpecialization()) super.getAttackStepChildren() #end );
+      #set($subClassAndAttackStepName="")
+      #foreach ($childPointer in $attackStep.getChildPointers())
+         #if ($childPointer.getSubClassName()=="")
+            #set($subClassAndAttackStepName = $childPointer.getAttackStep().getName())
+         #else
+            #set($subClassAndAttackStepName = "${childPointer.getSubClassName()}.$childPointer.getAttackStep().getName()")
+         #end
+         #set($cpmultiplicity = $childPointer.getMultiplicity())
+         #if ($cpmultiplicity=="0-1" || $cpmultiplicity=="1")
+            #if ($childPointer.getRoleName()=="this")
+               if ($subClassAndAttackStepName != null) {
+                  set.add($subClassAndAttackStepName);
+               }
+            #else
+               if (${childPointer.getRoleName()}(null) != null) {
+                  set.add(${childPointer.getRoleName()}(null).$subClassAndAttackStepName);
+               }
+            #end
+         #elseif($cpmultiplicity=="1-*" || $cpmultiplicity=="*")
+            for (${childPointer.getAttackStep().getAsset().getName()}  ${childPointer.getAttackStep().getAsset().getDecapitalizedName()} :  ${childPointer.getRoleName()}(null)) {
+               set.add(${childPointer.getAttackStep().getAsset().getDecapitalizedName()}.$subClassAndAttackStepName);
+            }
+         #end
+      #end
+      return set;
+   }
+#end

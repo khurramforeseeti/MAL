@@ -1,0 +1,12 @@
+
+   #if ($parentAssetNameAccordingToAssociation==$parentAssetNameAccordingToAttackStep)
+      for ($parentAssetNameAccordingToAttackStep $CompilerModel.decapitalize($parentAssetNameAccordingToAttackStep) : $parentRoleName(sample)) {
+         sample.addExpectedParent(this, ${CompilerModel.decapitalize($parentAssetNameAccordingToAttackStep)}.${parentShortStepName});
+      }
+   #else
+      for ($parentAssetNameAccordingToAssociation $CompilerModel.decapitalize($parentAssetNameAccordingToAssociation) : $parentRoleName(sample)) {
+         if($CompilerModel.decapitalize($parentAssetNameAccordingToAssociation) instanceof $parentAssetNameAccordingToAttackStep) {
+            sample.addExpectedParent(this, (($parentAssetNameAccordingToAttackStep) ${CompilerModel.decapitalize($parentAssetNameAccordingToAssociation)}).${parentShortStepName});
+         }
+      }
+   #end

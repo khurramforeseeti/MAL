@@ -1,0 +1,22 @@
+package $packageName;
+
+import com.foreseeti.corelib.Link;
+public enum AutoLangLink implements Link {
+  #set($comma = "")
+  #foreach ($association in $model.getLinks().keySet())
+   $!comma
+   $model.getLinks().get($association) ("$association.getName()")
+   #set($comma = ",")
+  #end
+  ;
+
+   private final String name;
+      AutoLangLink(String name) {
+      this.name = name;
+   }
+
+   @Override
+   public String getName() {
+      return name;
+   }
+}

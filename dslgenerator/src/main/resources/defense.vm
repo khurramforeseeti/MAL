@@ -1,0 +1,60 @@
+
+@TypeName(name = "$attackStep.getCapitalizedName()")
+@TypeDescription(text = "$attackStep.getCapitalizedName()")
+public class $attackStep.getCapitalizedName() extends #if( $attackStep.getSuperAttackStepName()!="" ) $attackStep.getSuperAttackStepName() #else Defense #end {
+   public $attackStep.getCapitalizedName()(Boolean enabled) {
+      super(enabled);
+      disable = new Disable();
+   }
+   #set($baseAttackStep = $attackStep.getBaseAttackStep())
+   #if(!$baseAttackStep)
+      #set($baseAttackStep = $attackStep)
+   #end
+
+   public $baseAttackStep.getCapitalizedName()(${baseAttackStep.getAsset().getCapitalizedName()}.${baseAttackStep.getCapitalizedName()} other) {
+      super(other);
+      disable = new Disable();
+   }
+   #set($existenceRoles = $attackStep.getExistenceRequirementRoles())
+   #set($type=$attackStep.getAttackStepType())
+   #if($existenceRoles.size()>0)
+      @Override
+      public boolean isEnabled(ConcreteSample sample) {
+         #set($role = $existenceRoles.get(0))
+         #set($asso = $model.getConnectedAssociation($attackStep.getAsset().getName(), $role))
+         #set($multiplicity = $asso.targetMultiplicityIncludingInheritance($attackStep.getAsset()))
+         #if($multiplicity=="1" || $multiplicity=="0-1")
+            #if($type=="E")
+               return $role == null;
+            #elseif($type=="3")
+               return $role != null;
+            #end
+         #else
+            #if($type=="E")
+               return ${role}.isEmpty();
+            #elseif($type=="3")
+               return !${role}.isEmpty();
+            #end
+         #end
+      }
+   #end
+
+   public class Disable extends #if($attackStep.getSuperAttackStepName()!="") ${attackStep.getSuperAttackStepName()}.Disable #else AttackStepMin #end {
+      #parse("updatechildren.vm")
+
+      @Override
+      public FClass getContainerFClass() {
+         return ${asset.getName()}.this;
+      }
+
+      @Override
+      public Defense getInfluencingDefense() {
+         return ${attackStep.getCapitalizedName()}.this;
+      }
+   }
+
+   @Override
+   public FClass getContainerFClass() {
+      return ${asset.getName()}.this;
+   }
+}
