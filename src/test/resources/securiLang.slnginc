@@ -562,7 +562,6 @@ category System {
 
 category Networking {
    asset Network
-      info: "Networks include Ethernet LANs, the Internet, and Wifi networks."
       // For WPA, if the attacker is in range of wifi, a Pairwise Transient Key (PTK) can be captured if eavesdropping on a legitimate handshake between AP and station. From the PTK, the Pre-Shared Key (PSK), can be brute force guessed if it is simple. (PTK from PSK includes PBKDF2 with 4096 iterations, so guessing will be slow.)
       // This should be modelled as folows: An unencrypted dataflow represents the handshake. The dataflow contains the PSK in the form of a Key (wrapped in encrypted Data). The PSK is then used as the encryption key of all dataflows over the WPA network.
       // The attacker will therefore be able to obtain the encrypted PSK. If cracked (a separate attack required), all (other) dataflows over the WPA network can be eavesdropped on.
@@ -570,7 +569,6 @@ category Networking {
 
       {
       | physicalAccess
-            info: "Physical access currently includes close-enough-to-touch as well as within-wifi-range."
             ->    accessLayer3,
                manInTheMiddle
 
@@ -601,7 +599,6 @@ category Networking {
    asset WAN extends Network {}
 
    asset Ethernet extends Network
-      info: "Networks include Ethernet LANs, the Internet, and WiFi networks."
       // For WPA, if the attacker is in range of wifi, a Pairwise Transient Key (PTK) can be captured if eavesdropping on a legitimate handshake between AP and station. From the PTK, the Pre-Shared Key (PSK), can be brute force guessed if it is simple. (PTK from PSK includes PBKDF2 with 4096 iterations, so guessing will be slow.)
       // This should be modelled as folows: An unencrypted dataflow represents the handshake. The dataflow contains the PSK in the form of a Key (wrapped in encrypted Data). The PSK is then used as the encryption key of all dataflows over the WPA network.
       // The attacker will therefore be able to obtain the encrypted PSK. If cracked (a separate attack required), all (other) dataflows over the WPA network can be eavesdropped on.
@@ -609,7 +606,6 @@ category Networking {
 
       {
       | physicalAccess
-            info: "Physical access currently includes close-enough-to-touch as well as within-wifi-range."
             ->    bypassPortSecurity
 
       & bypassPortSecurity
@@ -654,7 +650,6 @@ category Networking {
       }
 
    asset Wifi extends Ethernet
-      info: "Networks include Ethernet LANs, the Internet, and WiFi networks."
       // For WPA, if the attacker is in range of wifi, a Pairwise Transient Key (PTK) can be captured if eavesdropping on a legitimate handshake between AP and station. From the PTK, the Pre-Shared Key (PSK), can be brute force guessed if it is simple. (PTK from PSK includes PBKDF2 with 4096 iterations, so guessing will be slow.)
       // This should be modelled as folows: An unencrypted dataflow represents the handshake. The dataflow contains the PSK in the form of a Key (wrapped in encrypted Data). The PSK is then used as the encryption key of all dataflows over the WPA network.
       // The attacker will therefore be able to obtain the encrypted PSK. If cracked (a separate attack required), all (other) dataflows over the WPA network can be eavesdropped on.
@@ -662,7 +657,6 @@ category Networking {
 
       {
       | physicalAccess
-            info: "Physical access currently includes close-enough-to-touch as well as within-wifi-range."
             ->    bypassPortSecurity,
                sniffUnencryptedHandshake,
                wifiTrafficRouters.evilTwinHandshakeSniff

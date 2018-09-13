@@ -3,19 +3,16 @@ package se.kth.mal;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.TerminalNode;
-
-import se.kth.mal.sLangBaseListener;
-import se.kth.mal.sLangParser;
 
 public class SecuriLangListener extends sLangBaseListener {
 
-   String                         path;
-   List<CompilerModel.AttackStep> containerSteps      = new ArrayList<>();
-
-   CompilerModel                  model;
-   CompilerModel.Asset            currentAsset;
-   String                         currentCategoryName = "NoCategoryName";
+   String           path;
+   List<AttackStep> containerSteps      = new ArrayList<>();
+   CompilerModel    model;
+   Asset            currentAsset;
+   String           currentCategoryName = "NoCategoryName";
 
    public SecuriLangListener(CompilerModel model) {
       this.model = model;
@@ -23,13 +20,22 @@ public class SecuriLangListener extends sLangBaseListener {
 
    @Override
    public void enterAssetDeclaration(sLangParser.AssetDeclarationContext ctx) {
+      boolean abstractAsset = ctx.getText().startsWith("abstract");
+      System.out.println("asset = " + ctx.Identifier(0).getText());
       if (ctx.Identifier().size() == 1) {
-         currentAsset = model.addAsset(ctx.Identifier(0).getText(), "");
+         currentAsset = model.addAsset(ctx.Identifier(0).getText(), "", abstractAsset);
       }
       else {
-         currentAsset = model.addAsset(ctx.Identifier(0).getText(), ctx.Identifier(1).getText());
+         currentAsset = model.addAsset(ctx.Identifier(0).getText(), ctx.Identifier(1).getText(), abstractAsset);
       }
-      currentAsset.category = currentCategoryName;
+      ParserRuleContext parent = ctx.getParent();
+      if (parent != null && parent instanceof sLangParser.CategoryDeclarationContext) {
+         sLangParser.CategoryDeclarationContext categoryCtx = (sLangParser.CategoryDeclarationContext) parent;
+         currentAsset.category = categoryCtx.Identifier().getText();
+      }
+      else {
+         currentAsset.category = currentCategoryName;
+      }
    }
 
    @Override
@@ -40,10 +46,10 @@ public class SecuriLangListener extends sLangBaseListener {
 
    @Override
    public void enterAttackStepDeclaration(sLangParser.AttackStepDeclarationContext ctx) {
-      CompilerModel.AttackStep attackStep;
+      AttackStep attackStep;
       attackStep = currentAsset.addAttackStep(true, ctx.attackStepType().getText(), ctx.Identifier().getText());
       if (!(ctx.children() == null)) {
-         List<CompilerModel.AttackStepPointer> childPointers = getChildPointers(ctx.children());
+         List<AttackStepPointer> childPointers = getChildPointers(ctx.children());
          attackStep.childPointers = childPointers;
       }
       if (containerSteps.size() > 0) {
@@ -68,7 +74,7 @@ public class SecuriLangListener extends sLangBaseListener {
 
    @Override
    public void enterExistenceStepDeclaration(sLangParser.ExistenceStepDeclarationContext ctx) {
-      CompilerModel.AttackStep attackStep;
+      AttackStep attackStep;
       attackStep = currentAsset.addAttackStep(true, ctx.existenceStepType().getText(), ctx.Identifier().getText());
       if (!(ctx.existenceRequirements() == null)) {
          for (TerminalNode existenceRequirement : ctx.existenceRequirements().Identifier()) {
@@ -76,7 +82,7 @@ public class SecuriLangListener extends sLangBaseListener {
          }
       }
       if (!(ctx.children() == null)) {
-         List<CompilerModel.AttackStepPointer> childPointers = getChildPointers(ctx.children());
+         List<AttackStepPointer> childPointers = getChildPointers(ctx.children());
          attackStep.childPointers = childPointers;
       }
       if (containerSteps.size() > 0) {
@@ -104,10 +110,10 @@ public class SecuriLangListener extends sLangBaseListener {
       containerSteps.remove(containerSteps.size() - 1);
    }
 
-   protected List<CompilerModel.AttackStepPointer> getChildPointers(sLangParser.ChildrenContext ctx) {
-      List<CompilerModel.AttackStepPointer> childPointers = new ArrayList<>();
+   protected List<AttackStepPointer> getChildPointers(sLangParser.ChildrenContext ctx) {
+      List<AttackStepPointer> childPointers = new ArrayList<>();
       for (sLangParser.ExpressionNameContext enc : ctx.expressionName()) {
-         CompilerModel.AttackStepPointer childPointer = currentAsset.addStepPointer();
+         AttackStepPointer childPointer = currentAsset.addStepPointer();
          childPointer.attackStepName = enc.Identifier().getText();
          if ((enc.ambiguousName() == null)) {
             childPointer.roleName = "this";
@@ -123,7 +129,6 @@ public class SecuriLangListener extends sLangBaseListener {
          }
          childPointers.add(childPointer);
       }
-
       return childPointers;
    }
 }
